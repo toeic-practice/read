@@ -232,7 +232,7 @@ import {getAuth,onAuthStateChanged,signInAnonymously} from 'https://www.gstatic.
 import {getFirestore,collection,doc,setDoc,deleteDoc,onSnapshot,writeBatch} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 const config={apiKey:'AIzaSyAA3gxE4CLmVsH3LXjzl4J0O-QhcN14laI',authDomain:'database-89162.firebaseapp.com',projectId:'database-89162',storageBucket:'database-89162.firebasestorage.app',messagingSenderId:'60538861815',appId:'1:60538861815:web:92aa03a61146f491cafbf2',measurementId:'G-JMEN6QNVQ8'};
 const app=initializeApp(config),auth=getAuth(app),db=getFirestore(app);
-const allowed=['1000','0520','0608','0621','0000'];
+const allowed=['1000','0520','0608','0621','0000','1014'];
 const input=document.getElementById('accountCode'),connect=document.getElementById('connectCode'),leave=document.getElementById('leaveCode'),notice=document.getElementById('cloudNotice');
 let activeCode='',unsub=[],remoteAnswers={},remoteStars={},remoteExcerpts={},loadedA=false,loadedS=false,loadedE=false,generation=0;
 const cloud={ready:false,mode:'local'};window.toeicCloud=cloud;

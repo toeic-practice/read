@@ -735,7 +735,7 @@ const cloud={ready:false,mode:'local'};window.toeicCloud=cloud;
 function info(msg){notice.textContent=msg}
 function stopListeners(){generation++;unsub.forEach(fn=>fn());unsub=[];loadedA=false;loadedS=false;loadedE=false;remoteAnswers={};remoteStars={};remoteExcerpts={};cloud.ready=false}
 function localSave(){localStorage.setItem(LOCAL_KEY,JSON.stringify(records));localStorage.setItem(LOCAL_STAR_KEY,JSON.stringify(stars));localStorage.setItem(LOCAL_EXCERPT_KEY,JSON.stringify(excerpts))}
-function root(type){if(!activeCode||!cloud.ready)throw Error('雲端資料尚未載入');return collection(db,'practiceCodes',activeCode,type)}
+function root(type){if(!activeCode||!cloud.ready)throw Error('雲端資料尚未載入');return collection(db,'practiceCodes',activeCode,'test03_'+type)}
 function sync(){if(!activeCode||!loadedA||!loadedS||!loadedE)return;cloud.ready=true;cloud.mode='cloud';window.readingGate?.unlock();window.toeicApplyRemote?.({...remoteAnswers},{...remoteStars},{...remoteExcerpts});info('第三回雲端模式：'+activeCode+'，第三回的作答、星號與筆記已載入。');connect.disabled=false;leave.hidden=false}
 cloud.saveExcerpts=async(id,items)=>{if(!activeCode){if(items.length)excerpts[id]=items;else delete excerpts[id];localSave();render();return}const ref=doc(root('highlights'),String(id));if(items.length)await setDoc(ref,{items});else await deleteDoc(ref)};
 cloud.deleteAnswer=async(id)=>{
@@ -750,10 +750,10 @@ function goLocal(){window.readingGate?.lock();stopListeners();activeCode='';clou
 leave.addEventListener('click',goLocal);
 connect.addEventListener('click',async()=>{const code=input.value.trim();if(!allowed.includes(code)){info('代號無效，請輸入有效的使用者代號。');return}if(activeCode===code&&cloud.ready)return;stopListeners();activeCode=code;cloud.mode='loading';cloud.ready=false;window.toeicApplyRemote?.({},{});connect.disabled=true;leave.hidden=false;info('正在載入雲端歷史紀錄，請不要作答…');let token=generation;
 try{if(!auth.currentUser)await signInAnonymously(auth);if(token!==generation)return;
-const a=onSnapshot(collection(db,'practiceCodes',code,'answers'),snap=>{if(token!==generation)return;remoteAnswers={};snap.forEach(d=>{if(/^\d+$/.test(d.id))remoteAnswers[d.id]=d.data()});loadedA=true;sync()},err=>{if(token===generation){info('讀取雲端失敗：'+err.message+'。請檢查匿名驗證與 Firestore 規則。');connect.disabled=false}});
+const a=onSnapshot(collection(db,'practiceCodes',code,'test03_answers'),snap=>{if(token!==generation)return;remoteAnswers={};snap.forEach(d=>{if(/^\d+$/.test(d.id))remoteAnswers[d.id]=d.data()});loadedA=true;sync()},err=>{if(token===generation){info('讀取雲端失敗：'+err.message+'。請檢查匿名驗證與 Firestore 規則。');connect.disabled=false}});
 unsub.push(a);
-const b=onSnapshot(collection(db,'practiceCodes',code,'stars'),snap=>{if(token!==generation)return;remoteStars={};snap.forEach(d=>{if(/^\d+$/.test(d.id)&&d.data().marked)remoteStars[d.id]=true});loadedS=true;sync()},err=>{if(token===generation){info('讀取星號失敗：'+err.message);connect.disabled=false}});unsub.push(b);
-const c=onSnapshot(collection(db,'practiceCodes',code,'highlights'),snap=>{if(token!==generation)return;remoteExcerpts={};snap.forEach(d=>{const items=d.data().items;if(/^\d+$/.test(d.id)&&Array.isArray(items))remoteExcerpts[d.id]=items.filter(x=>typeof x==='string')});loadedE=true;sync()},err=>{if(token===generation){info('讀取文字摘錄失敗：'+err.message+'。請更新 Firestore 規則。');connect.disabled=false}});unsub.push(c);
+const b=onSnapshot(collection(db,'practiceCodes',code,'test03_stars'),snap=>{if(token!==generation)return;remoteStars={};snap.forEach(d=>{if(/^\d+$/.test(d.id)&&d.data().marked)remoteStars[d.id]=true});loadedS=true;sync()},err=>{if(token===generation){info('讀取星號失敗：'+err.message);connect.disabled=false}});unsub.push(b);
+const c=onSnapshot(collection(db,'practiceCodes',code,'test03_highlights'),snap=>{if(token!==generation)return;remoteExcerpts={};snap.forEach(d=>{const items=d.data().items;if(/^\d+$/.test(d.id)&&Array.isArray(items))remoteExcerpts[d.id]=items.filter(x=>typeof x==='string')});loadedE=true;sync()},err=>{if(token===generation){info('讀取文字摘錄失敗：'+err.message+'。請更新 Firestore 規則。');connect.disabled=false}});unsub.push(c);
 }catch(err){if(token===generation){info('Firebase 連線失敗：'+err.message);connect.disabled=false}}});
 input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();connect.click()}});
 // 在雲端讀取期間禁用作答；已離線作答不會自動上傳。

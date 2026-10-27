@@ -818,13 +818,13 @@ const config={apiKey:'AIzaSyAA3gxE4CLmVsH3LXjzl4J0O-QhcN14laI',authDomain:'datab
 const app=initializeApp(config),auth=getAuth(app),db=getFirestore(app);
 const allowed=['1000','0520','0608','0621','0000','1014'];
 const input=document.getElementById('accountCode'),connect=document.getElementById('connectCode'),leave=document.getElementById('leaveCode'),notice=document.getElementById('cloudNotice');
-let activeCode='',unsub=[],remoteAnswers={},remoteStars={},remoteExcerpts={},loadedA=false,loadedS=false,loadedE=false,loadedD=false,remoteDrill={},generation=0;
+let activeCode='',unsub=[],remoteAnswers={},remoteStars={},remoteExcerpts={},loadedA=false,loadedS=false,loadedE=false,loadedD=false,remoteDrill={},drillVersion=0,appliedDrillVersion=-1,generation=0;
 const cloud={ready:false,mode:'local'};window.toeicCloud=cloud;
 function info(msg){notice.textContent=msg}
-function stopListeners(){generation++;unsub.forEach(fn=>fn());unsub=[];loadedA=false;loadedS=false;loadedE=false;loadedD=false;remoteAnswers={};remoteStars={};remoteExcerpts={};remoteDrill={};cloud.ready=false}
+function stopListeners(){generation++;unsub.forEach(fn=>fn());unsub=[];loadedA=false;loadedS=false;loadedE=false;loadedD=false;remoteAnswers={};remoteStars={};remoteExcerpts={};remoteDrill={};drillVersion=0;appliedDrillVersion=-1;cloud.ready=false}
 function localSave(){localStorage.setItem(LOCAL_KEY,JSON.stringify(records));localStorage.setItem(LOCAL_STAR_KEY,JSON.stringify(stars));localStorage.setItem(LOCAL_EXCERPT_KEY,JSON.stringify(excerpts))}
 function root(type){if(!activeCode||!cloud.ready)throw Error('雲端資料尚未載入');return collection(db,'practiceCodes',activeCode,'test05_'+type)}
-function sync(){if(!activeCode||!loadedA||!loadedS||!loadedE||!loadedD)return;cloud.ready=true;cloud.mode='cloud';window.toeicApplyDrillRemote?.(remoteDrill);window.toeicApplyRemote?.({...remoteAnswers},{...remoteStars},{...remoteExcerpts});window.readingGate?.unlock();info('第五回雲端模式：'+activeCode+'，第五回的作答、星號與筆記已載入。');connect.disabled=false;leave.hidden=false}
+function sync(){if(!activeCode||!loadedA||!loadedS||!loadedE||!loadedD)return;cloud.ready=true;cloud.mode='cloud';if(drillVersion!==appliedDrillVersion){window.toeicApplyDrillRemote?.(remoteDrill);appliedDrillVersion=drillVersion}window.toeicApplyRemote?.({...remoteAnswers},{...remoteStars},{...remoteExcerpts});window.readingGate?.unlock();info('第五回雲端模式：'+activeCode+'，第五回的作答、星號與筆記已載入。');connect.disabled=false;leave.hidden=false}
 cloud.saveExcerpts=async(id,items)=>{if(!activeCode){if(items.length)excerpts[id]=items;else delete excerpts[id];localSave();render();return}const ref=doc(root('highlights'),String(id));if(items.length)await setDoc(ref,{items});else await deleteDoc(ref)};
 cloud.deleteAnswer=async(id)=>{
   if(!activeCode){delete records[id];localSave();render();return}
@@ -843,7 +843,7 @@ const a=onSnapshot(collection(db,'practiceCodes',code,'test05_answers'),snap=>{i
 unsub.push(a);
 const b=onSnapshot(collection(db,'practiceCodes',code,'test05_stars'),snap=>{if(token!==generation)return;remoteStars={};snap.forEach(d=>{if(/^\d+$/.test(d.id)&&d.data().marked)remoteStars[d.id]=true});loadedS=true;sync()},err=>{if(token===generation){info('讀取星號失敗：'+err.message);connect.disabled=false}});unsub.push(b);
 const c=onSnapshot(collection(db,'practiceCodes',code,'test05_highlights'),snap=>{if(token!==generation)return;remoteExcerpts={};snap.forEach(d=>{const items=d.data().items;if(/^\d+$/.test(d.id)&&Array.isArray(items))remoteExcerpts[d.id]=items.filter(x=>typeof x==='string')});loadedE=true;sync()},err=>{if(token===generation){info('讀取文字摘錄失敗：'+err.message+'。請更新 Firestore 規則。');connect.disabled=false}});unsub.push(c);
-const d=onSnapshot(doc(db,'practiceCodes',code,'test05_drill','state'),snap=>{if(token!==generation)return;remoteDrill=snap.exists()?snap.data():{};loadedD=true;sync()},err=>{if(token===generation){info('讀取錯題練習失敗：'+err.message+'。請先更新 Firebase Rules。');connect.disabled=false}});unsub.push(d);
+const d=onSnapshot(doc(db,'practiceCodes',code,'test05_drill','state'),snap=>{if(token!==generation)return;remoteDrill=snap.exists()?snap.data():{};drillVersion++;loadedD=true;sync()},err=>{if(token===generation){info('讀取錯題練習失敗：'+err.message+'。請先更新 Firebase Rules。');connect.disabled=false}});unsub.push(d);
 }catch(err){if(token===generation){info('Firebase 連線失敗：'+err.message);connect.disabled=false}}});
 input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();connect.click()}});
 // 在雲端讀取期間禁用作答；已離線作答不會自動上傳。

@@ -653,7 +653,9 @@ for(const id of Object.keys(drillExcluded)){
   if(drillExcluded[id]===true)drillExcluded[id]=drillRecordSignature(records?.[id]);
 }
 try{localStorage.setItem(DRILL_EXCLUDED_KEY,JSON.stringify(drillExcluded))}catch(e){}
-function saveDrill(){try{localStorage.setItem(DRILL_KEY,JSON.stringify(drillBank));localStorage.setItem(DRILL_ANSWER_KEY,JSON.stringify(drillAnswers));localStorage.setItem(DRILL_EXCLUDED_KEY,JSON.stringify(drillExcluded))}catch(e){alert('錯題練習無法儲存，請確認瀏覽器儲存空間。')}}
+function saveDrill(){const c=window.toeicCloud;if(c?.mode==='cloud'&&c.ready){c.saveDrill({bank:drillBank,attempts:drillAnswers,excluded:drillExcluded}).catch(e=>alert('錯題雲端儲存失敗：'+e.message));return}if(c?.mode==='loading')return;try{localStorage.setItem(DRILL_KEY,JSON.stringify(drillBank));localStorage.setItem(DRILL_ANSWER_KEY,JSON.stringify(drillAnswers));localStorage.setItem(DRILL_EXCLUDED_KEY,JSON.stringify(drillExcluded))}catch(e){alert('錯題練習無法儲存，請確認瀏覽器儲存空間。')}}
+window.toeicApplyDrillRemote=function(data){drillBank=structuredClone(data?.bank||{});drillAnswers=structuredClone(data?.attempts||{});drillExcluded=structuredClone(data?.excluded||{});render()};
+window.toeicRestoreLocalDrill=function(){try{drillBank=JSON.parse(localStorage.getItem(DRILL_KEY)||'{}')||{};drillAnswers=JSON.parse(localStorage.getItem(DRILL_ANSWER_KEY)||'{}')||{};drillExcluded=JSON.parse(localStorage.getItem(DRILL_EXCLUDED_KEY)||'{}')||{}}catch(e){drillBank={};drillAnswers={};drillExcluded={}}};
 function collectWrongAnswers(){
   let dirty=false;
   for(const [id,r] of Object.entries(records||{})){
@@ -904,13 +906,13 @@ const config={apiKey:'AIzaSyAA3gxE4CLmVsH3LXjzl4J0O-QhcN14laI',authDomain:'datab
 const app=initializeApp(config),auth=getAuth(app),db=getFirestore(app);
 const allowed=['1000','0520','0608','0621','0000','1014'];
 const input=document.getElementById('accountCode'),connect=document.getElementById('connectCode'),leave=document.getElementById('leaveCode'),notice=document.getElementById('cloudNotice');
-let activeCode='',unsub=[],remoteAnswers={},remoteStars={},remoteExcerpts={},loadedA=false,loadedS=false,loadedE=false,generation=0;
+let activeCode='',unsub=[],remoteAnswers={},remoteStars={},remoteExcerpts={},loadedA=false,loadedS=false,loadedE=false,loadedD=false,remoteDrill={},generation=0;
 const cloud={ready:false,mode:'local'};window.toeicCloud=cloud;
 function info(msg){notice.textContent=msg}
-function stopListeners(){generation++;unsub.forEach(fn=>fn());unsub=[];loadedA=false;loadedS=false;loadedE=false;remoteAnswers={};remoteStars={};remoteExcerpts={};cloud.ready=false}
+function stopListeners(){generation++;unsub.forEach(fn=>fn());unsub=[];loadedA=false;loadedS=false;loadedE=false;loadedD=false;remoteAnswers={};remoteStars={};remoteExcerpts={};remoteDrill={};cloud.ready=false}
 function localSave(){localStorage.setItem(LOCAL_KEY,JSON.stringify(records));localStorage.setItem(LOCAL_STAR_KEY,JSON.stringify(stars));localStorage.setItem(LOCAL_EXCERPT_KEY,JSON.stringify(excerpts))}
 function root(type){if(!activeCode||!cloud.ready)throw Error('雲端資料尚未載入');return collection(db,'practiceCodes',activeCode,'test09_'+type)}
-function sync(){if(!activeCode||!loadedA||!loadedS||!loadedE)return;cloud.ready=true;cloud.mode='cloud';window.readingGate?.unlock();window.toeicApplyRemote?.({...remoteAnswers},{...remoteStars},{...remoteExcerpts});info('第九回雲端模式：'+activeCode+'，第九回的作答、星號與筆記已載入。');connect.disabled=false;leave.hidden=false}
+function sync(){if(!activeCode||!loadedA||!loadedS||!loadedE||!loadedD)return;cloud.ready=true;cloud.mode='cloud';window.toeicApplyDrillRemote?.(remoteDrill);window.toeicApplyRemote?.({...remoteAnswers},{...remoteStars},{...remoteExcerpts});window.readingGate?.unlock();info('第九回雲端模式：'+activeCode+'，第九回的作答、星號與筆記已載入。');connect.disabled=false;leave.hidden=false}
 cloud.saveExcerpts=async(id,items)=>{if(!activeCode){if(items.length)excerpts[id]=items;else delete excerpts[id];localSave();render();return}const ref=doc(root('highlights'),String(id));if(items.length)await setDoc(ref,{items});else await deleteDoc(ref)};
 cloud.deleteAnswer=async(id)=>{
   if(!activeCode){delete records[id];localSave();render();return}
@@ -919,15 +921,17 @@ cloud.deleteAnswer=async(id)=>{
 cloud.saveAnswer=async(id,data)=>{if(!activeCode){records[id]=data;localSave();render();return}await setDoc(doc(root('answers'),String(id)),data)};
 cloud.setStar=async(id,marked)=>{if(!activeCode){if(marked)stars[id]=true;else delete stars[id];localSave();render();return}const ref=doc(root('stars'),String(id));if(marked)await setDoc(ref,{marked:true});else await deleteDoc(ref)};
 cloud.importAnswers=async(items)=>{if(!activeCode){records={...records,...items};localSave();render();return}if(!cloud.ready)throw Error('雲端尚未載入');const entries=Object.entries(items);for(let i=0;i<entries.length;i+=400){const batch=writeBatch(db);for(const [id,data] of entries.slice(i,i+400))batch.set(doc(root('answers'),id),data);await batch.commit()}};
+cloud.saveDrill=async(data)=>{if(!activeCode||!cloud.ready)throw Error('錯題雲端尚未載入');await setDoc(doc(db,'practiceCodes',activeCode,'test09_drill','state'),data)};
 cloud.resetAnswers=async()=>{if(!activeCode){records={};localSave();render();return}if(!cloud.ready)throw Error('雲端尚未載入');const ids=Object.keys(remoteAnswers);for(let i=0;i<ids.length;i+=400){const batch=writeBatch(db);ids.slice(i,i+400).forEach(id=>batch.delete(doc(root('answers'),id)));await batch.commit()}};
-function goLocal(){window.readingGate?.lock();stopListeners();activeCode='';cloud.mode='local';input.value='';input.disabled=false;connect.disabled=false;leave.hidden=true;window.toeicClearRemote?.();info('本機模式：未連線雲端，作答只保存在此瀏覽器。')}
+function goLocal(){window.readingGate?.lock();stopListeners();activeCode='';cloud.mode='local';window.toeicRestoreLocalDrill?.();input.value='';input.disabled=false;connect.disabled=false;leave.hidden=true;window.toeicClearRemote?.();info('本機模式：未連線雲端，作答只保存在此瀏覽器。')}
 leave.addEventListener('click',goLocal);
-connect.addEventListener('click',async()=>{const code=input.value.trim();if(!allowed.includes(code)){info('代號無效，請輸入有效的使用者代號。');return}if(activeCode===code&&cloud.ready)return;stopListeners();activeCode=code;cloud.mode='loading';cloud.ready=false;window.toeicApplyRemote?.({},{});connect.disabled=true;leave.hidden=false;info('正在載入雲端歷史紀錄，請不要作答…');let token=generation;
+connect.addEventListener('click',async()=>{const code=input.value.trim();if(!allowed.includes(code)){info('代號無效，請輸入有效的使用者代號。');return}if(activeCode===code&&cloud.ready)return;stopListeners();activeCode=code;cloud.mode='loading';cloud.ready=false;window.toeicApplyRemote?.({},{});window.toeicApplyDrillRemote?.({});connect.disabled=true;leave.hidden=false;info('正在載入雲端歷史紀錄，請不要作答…');let token=generation;
 try{if(!auth.currentUser)await signInAnonymously(auth);if(token!==generation)return;
 const a=onSnapshot(collection(db,'practiceCodes',code,'test09_answers'),snap=>{if(token!==generation)return;remoteAnswers={};snap.forEach(d=>{if(/^\d+$/.test(d.id))remoteAnswers[d.id]=d.data()});loadedA=true;sync()},err=>{if(token===generation){info('讀取雲端失敗：'+err.message+'。請檢查匿名驗證與 Firestore 規則。');connect.disabled=false}});
 unsub.push(a);
 const b=onSnapshot(collection(db,'practiceCodes',code,'test09_stars'),snap=>{if(token!==generation)return;remoteStars={};snap.forEach(d=>{if(/^\d+$/.test(d.id)&&d.data().marked)remoteStars[d.id]=true});loadedS=true;sync()},err=>{if(token===generation){info('讀取星號失敗：'+err.message);connect.disabled=false}});unsub.push(b);
 const c=onSnapshot(collection(db,'practiceCodes',code,'test09_highlights'),snap=>{if(token!==generation)return;remoteExcerpts={};snap.forEach(d=>{const items=d.data().items;if(/^\d+$/.test(d.id)&&Array.isArray(items))remoteExcerpts[d.id]=items.filter(x=>typeof x==='string')});loadedE=true;sync()},err=>{if(token===generation){info('讀取文字摘錄失敗：'+err.message+'。請更新 Firestore 規則。');connect.disabled=false}});unsub.push(c);
+const d=onSnapshot(doc(db,'practiceCodes',code,'test09_drill','state'),snap=>{if(token!==generation)return;remoteDrill=snap.exists()?snap.data():{};loadedD=true;sync()},err=>{if(token===generation){info('讀取錯題練習失敗：'+err.message+'。請先更新 Firebase Rules。');connect.disabled=false}});unsub.push(d);
 }catch(err){if(token===generation){info('Firebase 連線失敗：'+err.message);connect.disabled=false}}});
 input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();connect.click()}});
 // 在雲端讀取期間禁用作答；已離線作答不會自動上傳。
